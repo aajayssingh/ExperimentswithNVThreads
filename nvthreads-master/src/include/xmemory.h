@@ -104,12 +104,16 @@ public:
 
     static void initialize(void) {
         DEBUG("initializing xmemory");
+        lprintf("initializing xmemory");
         // Intercept SEGV signals (used for trapping initial reads and
         // writes to pages).
         installSignalHandler();
 
         // Call _pheap so that xheap.h can be initialized at first and then can work normally.
         _pheap.initialize();
+       // void* ajstrt = _pheap.fetchbase();//@J
+       // lprintf("xmemory init");
+
         _globals.initialize();
         xpageentry::getInstance().initialize();
 
@@ -159,9 +163,12 @@ public:
     }
 
     static inline void* nvmalloc(size_t sz, char *name) {
+       // printf("nvmalloc xmemory begin!\n");
         void *ptr = _pheap.malloc(_heapid, sz);
+       // printf("nvmalloc xmemory end!\n");
         if ( !ptr ) {
             lprintf("nvmalloc failed!\n");
+           // printf("nvmalloc failed!\n");
             abort();
         }
         int pageNo = _pheap.computePageNo(ptr);

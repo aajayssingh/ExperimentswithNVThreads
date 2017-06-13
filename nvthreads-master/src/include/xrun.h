@@ -107,6 +107,7 @@ public:
     /// @brief Initialize the system.
     static void initialize(void) {
         DEBUG("initializing xrun");
+        ajprintf("initializing xrun");
         
         _initialized = false;
         _protection_enabled = false;
@@ -452,9 +453,9 @@ public:
         return ptr;
     }
 
-    static inline unsigned long nvrecover(void *dest, size_t size, char *name) {
+    static inline unsigned long nvrecover(void *dest, size_t size, char *name, int count) {
         unsigned long addr;
-        addr = xmemory::_localNvRecovery->nvrecover(dest, size, name);
+        addr = xmemory::_localNvRecovery->nvrecover(dest, size, name, count);
         return addr;
     }
 
@@ -474,6 +475,7 @@ public:
     // In fact, we can delay to open its information about heap.
     static inline void free(void *ptr) {
         xmemory::free(ptr);
+        lprintf("@J| free xrun\n");
     }
 
     static inline size_t getSize(void *ptr) {

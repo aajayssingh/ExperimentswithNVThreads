@@ -153,7 +153,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 
       inline void free (void * ptr) {
-	// printf ("Free: %x (%d bytes)\n", ptr, getSize(ptr));
+	 printf ("Free: %x (%d bytes)\n", ptr, getSize(ptr));
 	const size_t objectSize = getSize(ptr); // was bigheap.getSize(ptr)
 	if (objectSize == 0) {
 	  // Something is wrong. Just drop the object.

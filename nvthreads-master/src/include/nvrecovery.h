@@ -58,6 +58,7 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #include <time.h>
 
 #include "logger.h"
+#include "aj.h"
 
 #define PATH_CONFIG "/tmp/nvthread.config"
 
@@ -67,10 +68,12 @@ enum RECOVER_STATUS {
 };
 
 /* NVthreads API */
+//static int node_count;
 extern "C"
 {
     bool isCrashed(void);
-    unsigned long nvrecover(void *dest, size_t size, char *name);
+    unsigned long nvrecover(void *dest, size_t size, char *name, int count);
+    //unsigned long nvrecover_aj(void *dest, size_t size, char *name, int count);
     void* nvmalloc(size_t size, char *name);
     void nvcheckpoint(void);
 }
@@ -95,6 +98,9 @@ struct pageDependence {
     unsigned long threadID; 
 };
 
+
+
+
 /* varmap = variable mapping, variable name <-> metadata
  * struct for log entry to be appended to the end of per-thread MemoryLog */
 struct varmap_entry {
@@ -104,8 +110,9 @@ struct varmap_entry {
     int pageOffset;
 };
 
-class nvrecovery {
 
+class nvrecovery 
+{
 public:
     nvrecovery() {
     }
@@ -113,6 +120,7 @@ public:
     }
 
     int nvid;
+
     int nvlib_linenum;
     char nvlib_crash[FILENAME_MAX];
     char logPath[FILENAME_MAX];
@@ -155,6 +163,8 @@ public:
     // Variable mapping info
     std::map<std::string, struct varmap_entry> *recoveredVarmap;
 
+    std::multimap<std::string, struct varmap_entry> *recoveredVarmapMulti; //@J to store multi prs with same name.
+
     void initialize(bool main_thread) {
         _main_thread = main_thread;
 #ifdef NVLOGGING
@@ -181,6 +191,7 @@ public:
 
         // Initialize pointers for variable map, page lookup info for heap and globals
         recoveredVarmap = NULL;
+        recoveredVarmapMulti = NULL;//@J
         _pageLookupHeap = NULL;
         _pageLookupGlobals = NULL;
 
@@ -368,7 +379,13 @@ public:
             // Generate a new NVID
             nvid = rand();
             lprintf("%s did not crash in previous execution\n", exe);
-            fprintf(fp, "%s, %d\n", exe, nvid);
+            
+            int a = FetchBaseAdd::get();
+            lprintf("LALA1 ;%d\n", a);//@J
+            void* ajaddr =  FetchBaseAdd::getaddr();
+            lprintf("LALA2 ;%p\n", ajaddr);//@J
+
+            fprintf(fp, "%s, %d %p\n", exe, nvid, ajaddr);
             line = -1;
         }
         fclose(fp);
@@ -585,9 +602,17 @@ public:
 
         if ( recoveredVarmap == NULL ) {
             recoveredVarmap = new std::map<std::string, struct varmap_entry>;
+
+            recoveredVarmapMulti = new std::multimap<std::string, struct varmap_entry>;//@J
         }
         if ( recoveredVarmap->size() != 0 ) {
             lprintf("recoveredVarmap already set with %zu records\n", recoveredVarmap->size());
+            return;
+        }
+
+        //@J
+                if ( recoveredVarmapMulti->size() != 0 ) {
+            lprintf("recoveredVarmap already set with %zu records\n", recoveredVarmapMulti->size());
             return;
         }
 
@@ -615,7 +640,21 @@ public:
 
             lprintf("inserting to varmap: <%s, %zu bytes, pageNo: %d, pageOffset: %d>\n", v.name, v.size, v.pageNo, v.pageOffset);
             recoveredVarmap->insert(std::make_pair((std::string)v.name, v));
-        }        
+            
+            recoveredVarmapMulti->insert(std::make_pair((std::string)v.name, v));
+        } 
+
+
+        //@J
+         std::map<std::string, struct varmap_entry>::iterator it;
+         lprintf("@J | recoveredVarmap records\n");
+        for (it=recoveredVarmap->begin(); it!=recoveredVarmap->end(); ++it)
+         lprintf("@J | recoveredVarmap %d : %d \n", it->first, it->second.pageOffset);       
+
+        std::multimap<std::string, struct varmap_entry>::iterator itmulti;
+         lprintf("@J | recoveredVarmapMulti records\n");
+        for (itmulti=recoveredVarmapMulti->begin(); itmulti!=recoveredVarmapMulti->end(); ++itmulti)
+         lprintf("@J | recoveredVarmapMulti %d : %d \n", itmulti->first, itmulti->second.pageOffset);
     }
 
     // Return the number of bytes we scanned + copied
@@ -736,7 +775,7 @@ public:
         return v;
     }
 
-    unsigned long nvrecover(void *dest, size_t size, char *name) {
+    unsigned long nvrecover(void *dest, size_t size, char *name, int count) {
         size_t bytes_checked;
 
         lprintf("Dest: 0x%p, size: %zu, name: %s\n", dest, size, name);
@@ -751,22 +790,144 @@ public:
         }
 
         // Find the address of the variable in varmap log
-        struct varmap_entry *v = RecoverVarmapInfo(name);
-        if ( !v ) {
-            lprintf("Error, can't find variable named %s\n", name);
-            return 0;
+        if(*name != 'z') 
+        {
+            struct varmap_entry *v = RecoverVarmapInfo(name);
+            if ( !v ) {
+                lprintf("Error, can't find variable named %s\n", name);
+                return 0;
+            }
+
+            // Copy data from log to destination
+            bytes_checked= RecoverDataFromMemlog((char*)dest, v, size);
+            if ( bytes_checked != size ) {
+                lprintf("Error, should've checked %zu bytes, but instead checked %zu bytes for variable named %s\n", size, bytes_checked, name);
+                return 0;            
+            }
+
+            // Find the data by address in memory pages
+            lprintf("nvrecover-ed %s\n", name);
+        }
+        else//@J
+        {
+            //struct varmap_entry *v = RecoverVarmapInfo(name);
+             lprintf("@J| inside else to recover %s\n", name);
+
+            struct varmap_entry *v;
+
+            // Look for variable name
+            std::multimap<std::string, struct varmap_entry>::iterator it;
+            
+            std::pair <std::multimap<std::string, struct varmap_entry>::iterator, std::multimap<std::string, struct varmap_entry>::iterator> ret;
+            ret = recoveredVarmapMulti->equal_range(name);
+
+            int node_count = 0;
+            for (it=ret.first; it!=ret.second; ++it,node_count++)
+            {   
+                if(node_count == count){
+                //it = recoveredVarmapMulti->find((std::string)name, it->end());
+                if ( it == recoveredVarmapMulti->end() ) {
+                lprintf("Cannot find %s\n", name);
+                return NULL;
+                }
+
+                // Found variable mapping
+                v = &it->second;
+                lprintf("Found %s with size %zu at pageNo %d pageOffset %d\n", v->name, v->size, v->pageNo, v->pageOffset);
+
+                // return v;
+                if ( !v ) {
+                lprintf("Error, can't find variable named %s\n", name);
+                return 0;
+                }
+
+                // if(count == 1)
+                //     break;
+                //count++;
+
+                // Copy data from log to destination
+                bytes_checked= RecoverDataFromMemlog((char*)dest, v, size);
+                if ( bytes_checked != size ) {
+                lprintf("Error, should've checked %zu bytes, but instead checked %zu bytes for variable named %s\n", size, bytes_checked, name);
+                return 0;            
+                }
+
+                // Find the data by address in memory pages
+                lprintf("nvrecover-ed %s\n", name);
+                }//ifended
+            }
+
         }
 
-        // Copy data from log to destination
-        bytes_checked= RecoverDataFromMemlog((char*)dest, v, size);
-        if ( bytes_checked != size ) {
-            lprintf("Error, should've checked %zu bytes, but instead checked %zu bytes for variable named %s\n", size, bytes_checked, name);
-            return 0;            
-        }
+        return 0;
+    }
 
-        // Find the data by address in memory pages
-        lprintf("nvrecover-ed %s\n", name);
+
+    unsigned long nvrecover_aj(void *dest, size_t size, char *name, int count) {
+        size_t bytes_checked;
+        int node_count=0;
+        lprintf("Dest: 0x%p, size: %zu, name: %s\n", dest, size, name);
         
+        // Recover page lookup info
+        if ( _pageLookupHeap == NULL ) {
+            RecoverLookup(true);
+        }
+        // Recover <variable, address> mapping info
+        if ( recoveredVarmap == NULL ) {
+            RecoverVarmap();
+        }
+
+        // Find the address of the variable in varmap log
+        if(*name == 'z') //@J
+        {
+            //struct varmap_entry *v = RecoverVarmapInfo(name);
+             lprintf("@J| inside nvrecover_aj to recover %s\n", name);
+
+            struct varmap_entry *v;
+
+            // Look for variable name
+            std::multimap<std::string, struct varmap_entry>::iterator it;
+            
+            std::pair <std::multimap<std::string, struct varmap_entry>::iterator, std::multimap<std::string, struct varmap_entry>::iterator> ret;
+            ret = recoveredVarmapMulti->equal_range(name);
+
+            int count = 0;
+            for (it=ret.first; it!=ret.second; ++it,count++)
+            {   
+                if(node_count == count){
+                //it = recoveredVarmapMulti->find((std::string)name, it->end());
+                if ( it == recoveredVarmapMulti->end() ) {
+                lprintf("Cannot find %s\n", name);
+                return NULL;
+                }
+
+                // Found variable mapping
+                v = &it->second;
+                lprintf("Found %s with size %zu at pageNo %d pageOffset %d\n", v->name, v->size, v->pageNo, v->pageOffset);
+
+                // return v;
+                if ( !v ) {
+                lprintf("Error, can't find variable named %s\n", name);
+                return 0;
+                }
+
+                // if(count == 1)
+                //     break;
+                //count++;
+
+                // Copy data from log to destination
+                bytes_checked= RecoverDataFromMemlog((char*)dest, v, size);
+                if ( bytes_checked != size ) {
+                lprintf("Error, should've checked %zu bytes, but instead checked %zu bytes for variable named %s\n", size, bytes_checked, name);
+                return 0;            
+                }
+
+                // Find the data by address in memory pages
+                lprintf("nvrecover-ed %s\n", name);
+                }//ifended
+            }
+
+        }
         return 0;
     }
 
