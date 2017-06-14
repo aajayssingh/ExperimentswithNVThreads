@@ -1,1 +1,2 @@
-customised nvmalloc and nvrecover to support list.
+>The src of NVThreads library is customised to implement custom nvmalloc and nvrecover methods to support my list applications.
+>basic level prototype of the customised apps is in test/recover dir.
