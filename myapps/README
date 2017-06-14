@@ -1,5 +1,0 @@
-the dir contains
-	coarse grained linked list implementation using customized NVthreads library.
-	open addressed hash table implementation using customized NVthreads library.
-
-rest coming soon ;)
