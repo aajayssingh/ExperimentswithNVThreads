@@ -446,9 +446,9 @@ public:
     }
 
     /* nvmalloc-related functions */
-    static inline void *my_custom_nvmalloc(size_t sz, char *name, bool is_list, unsigned long *nextNodeInfo){
+    static inline void *my_custom_nvmalloc(size_t sz, char *name, bool is_list, unsigned long *nodeInfo){
         void *ptr;
-        ptr = xmemory::my_custom_nvmalloc(sz, name, is_list, nextNodeInfo);
+        ptr = xmemory::my_custom_nvmalloc(sz, name, is_list, nodeInfo);
         return ptr;
     }
 

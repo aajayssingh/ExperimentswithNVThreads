@@ -163,9 +163,9 @@ extern "C"
         return xrun::isCrashed();
     }
 
-void* my_custom_nvmalloc(size_t size, char *name, bool is_list, unsigned long *nextNodeInfo) {
+void* my_custom_nvmalloc(size_t size, char *name, bool is_list, unsigned long *nodeInfo) {
         void *ptr;
-        ptr = xrun::my_custom_nvmalloc(size, name, is_list, nextNodeInfo);
+        ptr = xrun::my_custom_nvmalloc(size, name, is_list, nodeInfo);
         lprintf("custom nvmalloc-ed %s for %zu bytes at %p\n", name, size, ptr);
         return ptr;
     }

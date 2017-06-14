@@ -159,7 +159,7 @@ public:
     }
 
     
-static inline void* my_custom_nvmalloc(size_t sz, char *name, bool is_list, unsigned long *nextNodeInfo) {
+static inline void* my_custom_nvmalloc(size_t sz, char *name, bool is_list, unsigned long *nodeInfo) {
         void *ptr = _pheap.malloc(_heapid, sz);
         if ( !ptr ) {
             lprintf("custom nvmalloc failed!\n");
@@ -170,10 +170,10 @@ static inline void* my_custom_nvmalloc(size_t sz, char *name, bool is_list, unsi
         _localNvRecovery->AppendVarMapLog(ptr, sz, name, pageNo, pageOffset);
 
         //writing information to be used for reconstructing the addresses during recovery of the list.
-        // nextNodeInfo size should be 3. 
-        nextNodeInfo[0] = pageNo;
-        nextNodeInfo[1] = pageOffset;
-        nextNodeInfo[2] = sz;
+        // nodeInfo size should be 3. 
+        nodeInfo[0] = pageNo;
+        nodeInfo[1] = pageOffset;
+        nodeInfo[2] = sz;
 
 
         lprintf("custom nvmalloc %s for %zu bytes starting at %p with pageNo: %d, page offset: %d\n", name, sz, ptr, pageNo, pageOffset);

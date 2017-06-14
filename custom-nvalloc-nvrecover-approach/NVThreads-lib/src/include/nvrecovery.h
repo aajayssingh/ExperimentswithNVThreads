@@ -73,7 +73,7 @@ extern "C"
     unsigned long nvrecover(void *dest, size_t size, char *name);
     unsigned long my_custom_nvrecover(void *dest, unsigned long pageNo, unsigned long pageOffset, size_t size);
     void* nvmalloc(size_t size, char *name);
-    void* my_custom_nvmalloc(size_t size, char *name, bool is_list, unsigned long *nextNodeInfo);
+    void* my_custom_nvmalloc(size_t size, char *name, bool is_list, unsigned long *nodeInfo);
     void nvcheckpoint(void);
 }
 
