@@ -40,7 +40,7 @@ static int ic = 0;
 #ifdef DEBUG
 mutex mtx, mtxc;
 #endif
-
+pthread_mutex_t gm;
 //Barrier code
 typedef struct barrier {
     pthread_cond_t complete;
@@ -93,7 +93,7 @@ struct thread_info{
    barrier_t *barrier;
 };
 
-int number_of_threads = 0;
+int number_of_threads = 5;
 pthread_t *threads ;
 
 //number of delete, insert and lookup threads
@@ -118,14 +118,24 @@ void *taj(void *args)
     val_t v;
 
    // pthread_mutex_lock(&gm);
-    for (int i = 0; i < 10; i++)
+  /*  for (int i = 0; i < 10; i++)
     {
         key = rand()%(VAL_MAX - 1) + 1; // 1 - 99
         v = rand()%(VAL_MAX - 1) + 100;        
         add(list, key, v);
-    }  
+    }  */
 
     // pthread_mutex_unlock(&gm);
+
+ 
+   /* for (int i = 0; i < 2; i++)
+    {
+        key = rand()%(9 - 1) + 1; // 1 - 99
+        v = rand()%(VAL_MAX - 1) + 100;        
+        remove(list, key, &v);
+
+     //   printf("found key: %d\n", key);
+    } */ 
  
     nvcheckpoint();//redundant check later
   //  free(args);
@@ -139,22 +149,27 @@ int main()
     printf("Checking crash status\n");
     if ( isCrashed() )
     {
-       /* printf("I need to recover!\n");
+        printf("I need to recover!\n");
 
-        gettimeofday(&start, NULL);
+       /* void *ptr = malloc(sizeof(int));
+        nvrecover(ptr, sizeof(int), (char *)"c");
+        printf("RECOVERED c = %d WITH ADD %p\n", *(int*)ptr, (int*)ptr);
+        free(ptr);*/
+
+       // gettimeofday(&start, NULL);
         list = recover_init_list();
         printf("Recovered list...\n");
 
-        printf("list->head->key: %d\n", list->head->key);
-        printf("list->head->next->key: %d\n", list->head->next->key);
+        // printf("list->head->key: %d\n", list->head->key);
+        // printf("list->head->next->key: %d\n", list->head->next->key);
 
-        sort_list(list);
+        //sort_list(list);
 
-        gettimeofday(&endaj, NULL);
+       // gettimeofday(&endaj, NULL);
 
-        show_list (list);
+      //  show_list (list);
 
-        duration = (endaj.tv_sec - start.tv_sec);
+      /*  duration = (endaj.tv_sec - start.tv_sec);
         duration += ( endaj.tv_usec - start.tv_usec)/ 1000000.0;
         cout<<"recover time in (s):"<<duration<<endl;*/
     }
@@ -168,7 +183,8 @@ int main()
         time_t t;
         barrier_t barrier;
         pthread_t tid1;
-
+        pthread_mutex_init(&gm, NULL);
+      
         srand((unsigned) time(&t));
 
         /*ALLOCATING MEMORY TO THREADS FOR BOOKEEPING*/
@@ -188,20 +204,35 @@ int main()
         file10runCLOCK.open("runCLOCK.txt", fstream::out | fstream::app);
 */
         //INIT LIST
+        pthread_mutex_lock(&gm);
         list = init_list();
+        pthread_mutex_unlock(&gm);
 
-        //add some nodes initially
+        pthread_create(&tid1, NULL, taj, NULL);
+
+
         lkey_t key;  //key range forced to 1 to 99 (0 and 100 are for sentinel)
         val_t v;
 
-        pthread_create(&tid1, NULL, taj, NULL);
-        pthread_join(tid1, NULL);
-       
-        cout<<"starting list:"<<endl;
-        show_list(list);
+         pthread_mutex_lock(&gm);
+        for (int i = 0; i < 10; i++)
+        {
+            key = /*i +  2;//*/rand()%(VAL_MAX - 1) + 1; // 1 - 99
+            v = rand()%(VAL_MAX - 1) + 100;        
+            add(list, key, v);
+         }
+         pthread_mutex_unlock(&gm);  
+         
+         pthread_join(tid1, NULL);
 
+        //pthread_mutex_lock(&gm);
 
-#if 0
+        /*int *c = (int *)nvmalloc(sizeof(int), (char *)"c");
+        *c = 12345;
+        printf("c: %d ADD %p\n", *c, c);*/
+
+       // pthread_mutex_unlock(&gm);
+
         insertNum = (int)ceil((insertp*number_of_threads)/100);
         delNum = (int)ceil((delp*number_of_threads)/100);
         lookupNum = (int)ceil((lookp*number_of_threads)/100);
@@ -232,7 +263,7 @@ int main()
             if(i < insertNum)//init threaddata for insert threads
             {
                 td[i].thread_op = 0;
-                td[i].thread_key = rand()%(VAL_MAX - 1) + 1;  //1 t0 99: 0 & 100 is reserved for head and tail
+                td[i].thread_key = /*i + 20;//*/rand()%(VAL_MAX - 1) + 1;  //1 t0 99: 0 & 100 is reserved for head and tail
                 td[i].thread_val = td[i].thread_key +100;//value of linked list to be inserted
                 val = td[i].thread_val;
             }
@@ -291,7 +322,7 @@ int main()
                 exit(-1);
             }
         }
-
+         nvcheckpoint();
 
         //log completion time
         gettimeofday(&endaj, NULL);
@@ -343,7 +374,7 @@ int main()
         file10runRT<<elapsedajrt<<endl;
         file10runCLOCK<<timeaj<<endl;
 */
-#endif
+
         delete[] threads;
         delete[] td;
     }

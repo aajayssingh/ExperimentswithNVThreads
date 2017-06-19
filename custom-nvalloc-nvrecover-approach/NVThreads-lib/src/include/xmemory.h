@@ -176,7 +176,7 @@ static inline void* my_custom_nvmalloc(size_t sz, char *name, bool is_list, unsi
         nodeInfo[2] = sz;
 
 
-        lprintf("custom nvmalloc %s for %zu bytes starting at %p with pageNo: %d, page offset: %d\n", name, sz, ptr, pageNo, pageOffset);
+        ajprintf("custom nvmalloc %s for %zu bytes starting at %p with pageNo: %d, page offset: %d\n", name, sz, ptr, pageNo, pageOffset);
         return ptr;
     }
 
@@ -190,7 +190,7 @@ static inline void* my_custom_nvmalloc(size_t sz, char *name, bool is_list, unsi
         int pageOffset = _pheap.computePageOffset(ptr);
         _localNvRecovery->AppendVarMapLog(ptr, sz, name, pageNo, pageOffset);
 
-        lprintf("nvmalloc %s for %zu bytes starting at %p with pageNo: %d, page offset: %d\n", name, sz, ptr, pageNo, pageOffset);
+        ajprintf("nvmalloc %s for %zu bytes starting at %p with pageNo: %d, page offset: %d\n", name, sz, ptr, pageNo, pageOffset);
         return ptr;
     }
 

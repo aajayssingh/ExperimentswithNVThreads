@@ -631,7 +631,7 @@ public:
         unsigned short threadID = _pageLookupHeap[pageNo].threadID;
         unsigned long memlogOffset = _pageLookupHeap[pageNo].memlogOffset;
 
-        lprintf("Copying pageNo %d, memlogOffset: %lu\n", pageNo, memlogOffset);
+        ajprintf("Copying pageNo %d, memlogOffset: %lu\n", pageNo, memlogOffset);
 
         // First page, take care of offset to prevent overflow
         if ( remaining_bytes == total_size ) {
@@ -641,12 +641,12 @@ public:
             // Only need 1 page
             if ( pageOffset + total_size <= xdefines::PageSize ) {
                 bytes = total_size;
-                lprintf("First page (only need 1 page), starting from pageOffset: %d, copy %zu bytes\n", pageOffset, bytes);
+                ajprintf("First page (only need 1 page), starting from pageOffset: %d, copy %zu bytes\n", pageOffset, bytes);
             }
             // Need more than 1 page
             else{
                 bytes = xdefines::PageSize - pageOffset;
-                lprintf("First page (need more than 1 page), starting from pageOffset: %d, copy %zu bytes\n", pageOffset, bytes);
+                ajprintf("First page (need more than 1 page), starting from pageOffset: %d, copy %zu bytes\n", pageOffset, bytes);
             }
         }
         else{
@@ -654,16 +654,16 @@ public:
             // Last page, take care of #bytes to copy to prevent overflow
             if (remaining_bytes < xdefines::PageSize){
                 bytes = remaining_bytes;
-                lprintf("Last page, starting from pageOffset: 0, copy %zu bytes\n", bytes);
+                ajprintf("Last page, starting from pageOffset: 0, copy %zu bytes\n", bytes);
             }
             // Middle page
             else{
                 bytes = xdefines::PageSize;
-                lprintf("Middle page, starting from pageOffset: 0, copy %zu bytes\n", bytes);
+                ajprintf("Middle page, starting from pageOffset: 0, copy %zu bytes\n", bytes);
             }
         }
 
-        lprintf("memlogOffset: %lu, pageOffset: %d\n", memlogOffset, pageOffset);
+        ajprintf("memlogOffset: %lu, pageOffset: %d\n", memlogOffset, pageOffset);
 
         // Only recover data if the page was dirtied
         if ( _pageLookupHeap[pageNo].dirtied ) {
@@ -684,14 +684,14 @@ public:
             // Recover data from memory log
             sz = read(memlogFd, dest, bytes);
             if ( sz != bytes ) {
-                lprintf("Error: copy only %zu bytes, should've copied %zu bytes\n", sz, bytes);
+                ajprintf("Error: copy only %zu bytes, should've copied %zu bytes\n", sz, bytes);
             }
            
             close(memlogFd);
-            lprintf("copied %zu bytes for pageNo %d from %s, memlogOffset: %lu\n", sz, pageNo, memlogFn, memlogOffset);
+            ajprintf("copied %zu bytes for pageNo %d from %s, memlogOffset: %lu\n", sz, pageNo, memlogFn, memlogOffset);
         }
         else{
-            lprintf("pageNo %d is not dritied, checked %zu bytes, skip recoverying this page\n", pageNo, bytes);
+            ajprintf("pageNo %d is not dritied, checked %zu bytes, skip recoverying this page\n", pageNo, bytes);
         }
 
         return bytes;
@@ -745,11 +745,11 @@ unsigned long my_custom_nvrecover(void *dest, unsigned long pageNo, unsigned lon
         size_t bytes_checked;
         struct varmap_entry *v;
 
-        lprintf("Dest: 0x%p, size: %zu, pageNo: %zu, pageOffset: %zu\n", dest, size, pageNo, pageOffset);
+        ajprintf("Dest: 0x%p, size: %zu, pageNo: %zu, pageOffset: %zu\n", dest, size, pageNo, pageOffset);
         
         // Recover page lookup info
         if (( _pageLookupHeap == NULL ) || ( recoveredVarmap == NULL )) {
-            lprintf("Oh mon Dieu, programmer you did not recover the entry object using nvrecover()\n");
+            ajprintf("Oh mon Dieu, programmer you did not recover the entry object using nvrecover()\n");
             return 0;            
         }
 
@@ -769,12 +769,12 @@ unsigned long my_custom_nvrecover(void *dest, unsigned long pageNo, unsigned lon
         // Copy data from log to destination
         bytes_checked= RecoverDataFromMemlog((char*)dest, v, size);
         if ( bytes_checked != size ) {
-            lprintf("Error, should've checked %zu bytes, but instead checked %zu bytes for variable pageNo: %zu, pageOffset: %zu\n", size, bytes_checked, pageNo, pageOffset);
+            ajprintf("Error, should've checked %zu bytes, but instead checked %zu bytes for variable pageNo: %zu, pageOffset: %zu\n", size, bytes_checked, pageNo, pageOffset);
             return 0;            
         }
 
         // Find the data by address in memory pages
-        lprintf("custom nvrecover-ed object with pageNo: %d pageOffset: %d\n", v->pageNo, v->pageOffset);
+        ajprintf("custom nvrecover-ed object with pageNo: %d pageOffset: %d\n", v->pageNo, v->pageOffset);
 
         //free the allocated varmap entry
         free(v);
@@ -800,19 +800,19 @@ unsigned long my_custom_nvrecover(void *dest, unsigned long pageNo, unsigned lon
         // Find the address of the variable in varmap log
         struct varmap_entry *v = RecoverVarmapInfo(name);
         if ( !v ) {
-            lprintf("Error, can't find variable named %s\n", name);
+            ajprintf("Error, can't find variable named %s\n", name);
             return 0;
         }
 
         // Copy data from log to destination
         bytes_checked= RecoverDataFromMemlog((char*)dest, v, size);
         if ( bytes_checked != size ) {
-            lprintf("Error, should've checked %zu bytes, but instead checked %zu bytes for variable named %s\n", size, bytes_checked, name);
+            ajprintf("Error, should've checked %zu bytes, but instead checked %zu bytes for variable named %s\n", size, bytes_checked, name);
             return 0;            
         }
 
         // Find the data by address in memory pages
-        lprintf("nvrecover-ed %s\n", name);
+        ajprintf("nvrecover-ed %s\n", name);
         
         return 0;
     }

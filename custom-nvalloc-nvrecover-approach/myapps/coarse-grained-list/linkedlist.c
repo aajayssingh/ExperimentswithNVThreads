@@ -1,5 +1,5 @@
 /* ---------------------------------------------------------------------------
-
+ISSUES: I get map error: 0xffffffffffff if try to free a node.
  * ---------------------------------------------------------------------------
  */
 #include <algorithm>
@@ -24,11 +24,12 @@ static node_t *create_node(const key_t key, const val_t val)
   node_t *node;
 
   unsigned long *selfNodeInfo = (unsigned long *)malloc(NODE_INFO_ARR_SIZE*sizeof(unsigned long)); 
-       
-  //printf("gonna create node\n");
+  memset(selfNodeInfo, 0, sizeof(NODE_INFO_ARR_SIZE*sizeof(unsigned long)));   
+ // printf("gonna create node\n");
   //nvmalloc first node
   node = (node_t *)my_custom_nvmalloc(sizeof(node_t), (char *)"z", true, selfNodeInfo);
-  //printf("created node\n");
+  memset(node, 0, sizeof(node_t));
+ // printf("created node\n");
   
   if (node == NULL) {
     elog("create_node | nvmalloc error");
@@ -62,12 +63,11 @@ Meant to be atomically executed.
 */
 void updateLinks(node_t* first, node_t* second)
 {
-  first->next = second;
   for(int i = 0; i < NODE_INFO_ARR_SIZE; i++)
   {
       first->nextNodeInfo[i] = second->selfNodeInfo[i];
   }
-
+  first->next = second;
 }
 /*
  * success : return true
@@ -86,9 +86,7 @@ bool add(list_t * list, const key_t key, const val_t val)
     return false;*/
   
   pthread_mutex_lock(&(list->gmtx));
-   if ((newNode = create_node(key, val)) == NULL) //creating nodes atomically solves the problem of negative values for the nodes.
-    return false;
-
+   
   //#ifdef DBG
   printf("add [%d, %d]\n", key, val);
   // #endif
@@ -97,6 +95,9 @@ bool add(list_t * list, const key_t key, const val_t val)
   
   if (curr == list->tail)
   {
+    if ((newNode = create_node(key, val)) == NULL) //creating nodes atomically solves the problem of negative values for the nodes.
+    abort();
+
     updateLinks(list->head, newNode);//list->head->next = newNode;
     updateLinks(newNode, list->tail);//newNode->next = list->tail;
     list->node_count++;
@@ -111,17 +112,20 @@ bool add(list_t * list, const key_t key, const val_t val)
     
     if (curr != list->tail && key == curr->key)
     {
-      free_node(newNode);
-      newNode->key = -1;
-      newNode->val = -1;
+      //free_node(newNode); /free causes map error
+      // newNode->key = -1;
+      // newNode->val = -1;
       //#ifdef DBG
-      printf("NODE already PRESENT with key = %d\n", key);
+      printf("NODE already PRESENT with key = %d - node not created\n", key);
       //#endif
       ret = false;
       //list->node_count = list->node_count + 1;
     }
     else
     {
+      if ((newNode = create_node(key, val)) == NULL) //creating nodes atomically solves the problem of 
+        abort();
+
       updateLinks(newNode, curr); //newNode->next = curr;
       updateLinks(pred, newNode); //pred->next = newNode;
 
@@ -153,6 +157,7 @@ bool remove(list_t * list, const key_t key, val_t *val)
   if (curr == list->tail) /*list empty*/ 
   {
     ret = false;
+    printf("pal! cannot remove anymore the list has only head & tail :(\n");
   }
   else
   {
@@ -161,17 +166,21 @@ bool remove(list_t * list, const key_t key, val_t *val)
       pred = curr;
       curr = curr->next;
     }
-    
+
+
     if (key == curr->key)
     {
       *val = curr->val;
       
-      pred->next = curr->next;
-      free_node(curr);
+      //update links
+      updateLinks(pred, curr->next);
+      //pred->next = curr->next;
+     // free_node(curr); //node free causes maperr 0xffffffff!
       //curr = NULL;
       curr->key = -1;
       curr->val = -1;
-     // list->node_count--;
+      list->node_count = list->node_count - 1;
+      ret = true;
 
       //printf("freed the node key: %d\n", key);
       //#ifdef DBG
@@ -183,7 +192,7 @@ bool remove(list_t * list, const key_t key, val_t *val)
     else
       ret = false;
   }
-  printf("delete [%d, %d] res: %d\n", key, val, ret);
+  printf("delete [%d, %d] res: %d\n", key, (ret)?(*val):(-1), ret);
   pthread_mutex_unlock(&(list->gmtx));
   return ret;
 }
@@ -221,7 +230,7 @@ bool find(list_t * list, const key_t key, val_t *val)
     else
       ret = false;
   }
-   printf("find [%d, %d] res: %d\n", key, val, ret);
+   printf("find [%d, %d] res: %d\n", key, (ret)?(*val):(-1), ret);
   pthread_mutex_unlock(&(list->gmtx));
   return ret;
 }
@@ -249,12 +258,20 @@ list_t *init_list(void)
     elog("nvmalloc error");
     goto end;
   }
+  for(int i = 0; i < NODE_INFO_ARR_SIZE; i++) //used during recovery of head node
+  {
+    list->headNodeInfo[i] = list->head->selfNodeInfo[i];
+  }
   
 
   list->tail = create_node(VAL_MAX, VAL_MAX);;//(node_t *)nvmalloc(sizeof(node_t), (char *)"t");
   if (list->tail == NULL) {
     elog("nvmalloc error");
     goto end;
+  }
+  for(int i = 0; i < NODE_INFO_ARR_SIZE; i++)
+  {
+    list->tailNodeInfo[i] = list->tail->selfNodeInfo[i];
   }
   
   updateLinks(list->head, list->tail);// list->head->next = list->tail;
@@ -264,6 +281,12 @@ list_t *init_list(void)
 
   //init global list mutex lock 
   pthread_mutex_init(&(list->gmtx), NULL);
+
+  printf("list init\n");
+  printf("list->headNodeInfo[1]: %d, %p\n",  list->headNodeInfo[1], list->head);
+  printf("list->tailNodeInfo[1]: %d, %p\n",  list->tailNodeInfo[1], list->tail);
+
+
   
   return list;
   
@@ -273,7 +296,13 @@ list_t *init_list(void)
   return NULL;
 }
 
-#if 0
+void printNodeInfo(node_t * node)
+{
+  printf("node->key: %d, node->val: %d, node: %p, node->next: %p\n", node->key, node->val, node, node->next);
+  printf("node->selfNodeInfo: %d, %d, %d\n", node->selfNodeInfo[0], node->selfNodeInfo[1], node->selfNodeInfo[2]);
+  printf("node->nextNodeInfo: %d, %d, %d\n", node->nextNodeInfo[0], node->nextNodeInfo[1], node->nextNodeInfo[2]);
+}
+
 /*
  * success : return pointer to the initial list
  * failure : return NULL
@@ -283,65 +312,68 @@ list_t * recover_init_list (void)
   list_t *list;
   
   list = (list_t*)malloc(sizeof(list_t));
-  int node_index = 0;
-  nvrecover(list, sizeof(list_t), (char*)"z", 0);
+  
+  nvrecover(list, sizeof(list_t), (char*)"z");
   printf("Recovered list & node_count = %d\n", list->node_count);
   pthread_mutex_init(&(list->gmtx), NULL);
 
   //printf("list->head: %p\n", list->head);  
   //printf("list->tail: %p\n", list->tail);
 
-  printf("recovering head & tail...\n");
+ // printf("recovering head & tail...\n");
 
-  //next node
-  //node_index = (list->node_count) - 2; //two sentinel nodes
-  
-  node_index++;
   node_t *head = (node_t *)malloc(sizeof(node_t));
-  nvrecover(head, sizeof(node_t), (char*)"z", node_index);
+  //nvrecover(head, sizeof(node_t), (char*)"z", node_index);
+  my_custom_nvrecover(head, list->headNodeInfo[0], list->headNodeInfo[1], list->headNodeInfo[2]/*sizeof(node_t)*/);
   list->head = head;
-  printf(" recovered [%lu:%ld], index:%d\n", (unsigned long int) head->key, (long int)head->val, node_index);
+  printf(" recovered head[%lu:%ld], %d, %d, %p\n", (unsigned long int) head->key, (long int)head->val, list->headNodeInfo[0], list->headNodeInfo[1], list->head);
 
-  node_index++;
+  //node_index++;
   node_t *tail = (node_t *)malloc(sizeof(node_t));
-  nvrecover(tail, sizeof(node_t), (char*)"z", node_index);
+  my_custom_nvrecover(tail, list->tailNodeInfo[0], list->tailNodeInfo[1], list->tailNodeInfo[2]/*sizeof(node_t)*/);
   list->tail = tail;
-
-  printf(" recovered [%lu:%ld], index:%d\n", (unsigned long int) tail->key, (long int)tail->val, node_index); 
+  printf(" recovered tail[%lu:%ld], %d, %d, %p\n", (unsigned long int) tail->key, (long int)tail->val, list->tailNodeInfo[0], list->tailNodeInfo[1], list->tail); 
 
   node_t *pred, *curr;
   pred = list->head;
-//  curr = pred->next;
-int real_count = 0;
-  while ((++node_index) <= (list->node_count)) {
-    
-    node_t *curr = (node_t *)malloc(sizeof(node_t));
-    nvrecover(curr, sizeof(node_t), (char*)"z", node_index);
-    //printf("recovered node_index %d\n", node_index);
 
-    printf(" recovered [%lu:%ld], index:%d\n", (unsigned long int) curr->key, (long int)curr->val, node_index);
+  int node_index = 0;
+  while ((++node_index) <= (list->node_count -2 )) //skiping the tail node 
+  {    
+    
+    printf("pred: %p, %d, %d, %d  & prednextInfo: %d, %d\n\n",pred, pred->selfNodeInfo[0], pred->selfNodeInfo[1], pred->key, pred->nextNodeInfo[0], pred->nextNodeInfo[1]);
+
+    node_t *curr = (node_t *)malloc(sizeof(node_t));
+    my_custom_nvrecover(curr, pred->nextNodeInfo[0], pred->nextNodeInfo[1], pred->nextNodeInfo[2]);
+    
+    printf(" recovered [%ld:%ld], node_index: %d\n", (unsigned long int) curr->key, (long int)curr->val, node_index);
+
+printf("curr: %p, %d, %d, %d  & nextInfo: %d, %d\n\n",curr, curr->selfNodeInfo[0], curr->selfNodeInfo[1], curr->key, curr->nextNodeInfo[0], curr->nextNodeInfo[1]);
+
     if(curr->key == -1 && curr->val == -1)
     {
       free(curr);
-      real_count++;
+      printf("aww! key & value both -1 accessing the deleted node, backoff :(\n");
       continue;
     }
 
-    pred->next = curr;    
+   // pred->next = curr;  //use updateLinks()?????? 
+    updateLinks(pred, curr); 
     pred = curr;
 
   } 
-  pred->next = tail;
+//  pred->next = tail;
+  updateLinks(pred, tail);
 
   printf("recover_init_list | full list recovered :) :)\n");
-  list->node_count -= real_count;
+  //list->node_count -= real_count;
 
 //  list->mtx = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
   
   return list;
 
 }
-
+#if 0
 /*
  * void free_list(list_t * list)
  */
@@ -373,13 +405,42 @@ void show_list(const list_t * l)
     pred = l->head;
     curr = pred->next;
 
+    printf("pred: %p, %d, %d, %d  --> next: %p, %d, %d, %d \n\n",pred, pred->selfNodeInfo[0], pred->selfNodeInfo[1], pred->key, pred->next, pred->nextNodeInfo[0], pred->nextNodeInfo[1], pred->next->key);
+
+    printf ("list:\n\n");
+    while (curr != l->tail) {
+      printf(" -->[%ld:%ld]: %p\n", (long int) curr->key, (long int)curr->val, curr);
+      pred = curr;
+      curr = curr->next;
+     
+     printf("pred: %p, %d, %d, %d  --> next: %p, %d, %d, %d \n\n",pred, pred->selfNodeInfo[0], pred->selfNodeInfo[1], pred->key, pred->next, pred->nextNodeInfo[0], pred->nextNodeInfo[1], pred->next->key);
+
+    }
+    printf("\n");
+}
+
+void show_list_with_offsets(const list_t *l)
+{
+  /* node_t *pred, *curr;
+
+    pred = l->head;
+    
+
+    curr = pred->next;
+
+  for(int i = 0; i < NODE_INFO_ARR_SIZE; i++)
+  {
+    list->tailNodeInfo[i] = list->tail->selfNodeInfo[i];
+  }
+
+
     printf ("list:\n\t");
     while (curr != l->tail) {
       printf(" -->[%ld:%ld]", (long int) curr->key, (long int)curr->val);
       pred = curr;
       curr = curr->next;
     }
-    printf("\n");
+    printf("\n");*/
 }
 
 

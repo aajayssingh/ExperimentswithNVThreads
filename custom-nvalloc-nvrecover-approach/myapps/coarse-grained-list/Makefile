@@ -12,8 +12,7 @@ SRC_DIR = $(NVTHREAD_HOME)/src/source
 NVINCLUDE_DIRS = -I$(INC_DIR)
 NVSRCS = $(SRC_DIR)/nvrecovery.cpp 
 
-all:	ll_test_eval
-
+all: ll_test_eval
 ll_test_eval:
 	$(CC) $(CFLAGS) -DNVTHREAD $(NVINCLUDE_DIRS) $(NVSRCS) ll_test_eval.c linkedlist.c -o ll_test_eval.o -rdynamic $(NVLIB)
 clean:

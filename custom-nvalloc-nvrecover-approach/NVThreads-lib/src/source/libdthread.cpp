@@ -465,6 +465,9 @@ unsigned long my_custom_nvrecover(void *dest, unsigned long pageNo, unsigned lon
     ssize_t write(int fd, const void *buf, size_t count) {
         uint8_t *start = (uint8_t *)buf;
         volatile int temp;
+     
+        // char taj[100];
+        // printf("WRITE: %s\n", start);
 
         for (size_t i = 0; i < count; i += xdefines::PageSize) {
             temp = start[i];
@@ -472,12 +475,16 @@ unsigned long my_custom_nvrecover(void *dest, unsigned long pageNo, unsigned lon
 
         temp = start[count - 1];
 
+        // sprintf(taj, "%d,%d,%d, %d,%d,%d\n", start[0],start[1],start[2], start[3],start[4], start[5]);
+        // printf("WRITE: %s\n", taj);
+
         return WRAP(write)(fd, buf, count);
     }
 
     ssize_t read(int fd, void *buf, size_t count) {
         uint8_t *start = (uint8_t *)buf;
 
+        // printf("READ: %s\n", start);
         for (size_t i = 0; i < count; i += xdefines::PageSize) {
             start[i] = 0;
         }

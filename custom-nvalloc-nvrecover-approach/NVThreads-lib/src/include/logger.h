@@ -49,10 +49,25 @@ Place, Suite 330, Boston, MA 02111-1307 USA
 #define ADDRBYTE sizeof(void*)
 #define NVLOGGING
 #define LDEBUG 0
+#define LDEBUGAJ 0
+
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
 #define lprintf(...) \
     do{\
         if ( LDEBUG ) {\
+            char str_line[15];\
+            char str_pid[15];\
+            sprintf(str_pid, "%d", getpid());\
+            sprintf(str_line, "%d", __LINE__);\
+            fprintf(stderr, "\t|%15s | %5s | %25s | %5s | ", __FILENAME__, str_line, __FUNCTION__, str_pid);\
+            fprintf(stderr, __VA_ARGS__);\
+            fflush(stderr);\
+        }\
+    }while (0)\
+
+#define ajprintf(...) \
+    do{\
+        if ( LDEBUGAJ ) {\
             char str_line[15];\
             char str_pid[15];\
             sprintf(str_pid, "%d", getpid());\
